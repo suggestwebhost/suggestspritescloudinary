@@ -12,7 +12,7 @@ app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB Max upload limit
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
 client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
 db = client['sprites_db'] 
-sprites_collection = db.sprites
+sprites_collection = db.spritesrow
 
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
 if CLOUDINARY_URL:
@@ -42,6 +42,7 @@ def index():
         total_pages=total_pages,
         total_sprites=total_sprites
     )
+
 @app.route('/upload', methods=['POST'])
 def upload_sprites():
     category = request.form.get('category', 'general').strip().lower()
@@ -49,30 +50,31 @@ def upload_sprites():
     tags = [t.strip().lower() for t in tags_raw.split(',') if t.strip()]
     
     if 'sprites' not in request.files:
-        return jsonify({"error": "No file field found"}), 400
+        return jsonify({"error": "No file field 'sprites' found in request"}), 400
         
     uploaded_files = request.files.getlist('sprites')
     
-    if not uploaded_files or (len(uploaded_files) == 1 and uploaded_files.filename == ''):
+    if not uploaded_files or (len(uploaded_files) == 1 and uploaded_files[0].filename == ''):
         return jsonify({"error": "No files selected"}), 400
 
     inserted_count = 0
+    errors = []
 
     for file in uploaded_files:
         if file and file.filename != '':
             try:
-                # Direct stream upload to Cloudinary
+                # 1. Stream the file binary payload straight to Cloudinary
                 upload_result = cloudinary.uploader.upload(file, folder="sprite_vault")
                 image_url = upload_result.get('secure_url')
                 
                 if image_url:
                     original_filename = file.filename
                     
-                    # CORRECTION: Safely extract the string name component out of the list first
+                    # 💥 FIXED CRITICAL BUG: Safely extract the index string string from list array object
                     name_parts = original_filename.rsplit('.', 1)
-                    filename_without_extension = name_parts[0] # Takes the text string part
+                    filename_without_extension = name_parts[0]  # <--- CRUCIAL ZERO INDEX STRING PICKER FIX
                     
-                    # Now it is safe to execute string manipulation methods
+                    # 2. String cleaning is now completely safe to execute
                     clean_name = filename_without_extension.replace('_', ' ').replace('-', ' ').title()
                     
                     sprite_data = {
@@ -82,15 +84,20 @@ def upload_sprites():
                         "category": category,
                         "tags": tags
                     }
+                    
+                    # 3. Commit document structure to MongoDB
                     sprites_collection.insert_one(sprite_data)
                     inserted_count += 1
+                else:
+                    errors.append(f"Cloudinary rejected {file.filename}")
             except Exception as e:
-                # This catches errors and prints them to Render logs instead of failing silently
-                print(f"❌ Processing Error for {file.filename}: {str(e)}")
+                errors.append(f"Processing Error for {file.filename}: {str(e)}")
                 continue
 
-    return jsonify({"status": "success", "uploaded_count": inserted_count}), 200
+    if inserted_count == 0 and errors:
+        return jsonify({"status": "error", "message": "All uploads failed", "details": errors}), 500
 
+    return jsonify({"status": "success", "uploaded_count": inserted_count}), 200
 
 # ==================== API ENDPOINTS ====================
 @app.route('/api/sprites', methods=['GET'])
