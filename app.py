@@ -12,7 +12,7 @@ app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB Max upload limit
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
 client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
 db = client['sprites_db'] 
-sprites_collection = db.sprites
+sprites_collection = db.spritesrow
 
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
 if CLOUDINARY_URL:
