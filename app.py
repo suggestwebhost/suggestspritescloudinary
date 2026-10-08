@@ -12,12 +12,12 @@ app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB Max upload limit
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
 client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
 db = client['sprites_db'] 
-sprites_collection = db.spritesrow
+sprites_collection = db.sprites
 
+# Cloudinary Credentials Configuration Bucket
+# Replace the placeholder text strings inside the quotes with your real credentials:
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
-if CLOUDINARY_URL:
-    print("connected to cloudinary......succesfully")
-    cloudinary.config(cloudinary_url=CLOUDINARY_URL)
+
 # =========================================================================
 
 PER_PAGE = 12
@@ -51,7 +51,7 @@ def upload_sprites():
     tags = [t.strip().lower() for t in tags_raw.split(',') if t.strip()]
     
     if 'sprites' not in request.files:
-        return jsonify({"error": "No file field 'sprites' found in request"}), 400
+        return jsonify({"error": "No file field 'sprites' found"}), 400
         
     uploaded_files = request.files.getlist('sprites')
     
@@ -64,16 +64,16 @@ def upload_sprites():
     for file in uploaded_files:
         if file and file.filename != '':
             try:
-                # 1. Stream the file binary payload straight to Cloudinary
+                # 1. Stream file binary payload straight to Cloudinary
                 upload_result = cloudinary.uploader.upload(file, folder="sprite_vault")
                 image_url = upload_result.get('secure_url')
                 
                 if image_url:
                     original_filename = file.filename
                     
-                    # 💥 FIXED CRITICAL BUG: Safely extract the index string string from list array object
+                    # 💥 FIXED STRING BUG: Safely extract the string item using the [0] index
                     name_parts = original_filename.rsplit('.', 1)
-                    filename_without_extension = name_parts[0]  # <--- CRUCIAL ZERO INDEX STRING PICKER FIX
+                    filename_without_extension = name_parts[0]  # Exact string picker fix
                     
                     # 2. String cleaning is now completely safe to execute
                     clean_name = filename_without_extension.replace('_', ' ').replace('-', ' ').title()
@@ -97,6 +97,10 @@ def upload_sprites():
 
     if inserted_count == 0 and errors:
         return jsonify({"status": "error", "message": "All uploads failed", "details": errors}), 500
+
+    # Handles browser dashboard uploads gracefully by redirecting
+    if request.headers.get('Accept') != 'application/json' and 'json' not in request.headers.get('Content-Type', ''):
+        return redirect(url_for('index'))
 
     return jsonify({"status": "success", "uploaded_count": inserted_count}), 200
 
