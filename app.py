@@ -57,36 +57,36 @@ def upload_sprites():
     if not uploaded_files or (len(uploaded_files) == 1 and uploaded_files.filename == ''):
         return jsonify({"error": "No files selected"}), 400
 
+    inserted_count = 0
+
     for file in uploaded_files:
         if file and file.filename != '':
             try:
-                # Stream directly to Cloudinary permanent cloud storage
-                upload_result = cloudinary.uploader.upload(
-                    file,
-                    folder="sprite_vault"
-                )
-                
-                # Fetch the permanent absolute CDN delivery URL link
+                # Direct stream upload to Cloudinary
+                upload_result = cloudinary.uploader.upload(file, folder="sprite_vault")
                 image_url = upload_result.get('secure_url')
-                original_filename = file.filename
                 
-                # Create clean human display name
-                base_name = original_filename.rsplit('.', 1)[0]
-                clean_name = base_name.replace('_', ' ').replace('-', ' ').title()
-                
-                sprite_data = {
-                    "name": clean_name,
-                    "filename": original_filename,
-                    "image_url": image_url, # Stored permanently
-                    "category": category,
-                    "tags": tags
-                }
-                sprites_collection.insert_one(sprite_data)
+                if image_url:
+                    original_filename = file.filename
+                    
+                    # FIXED BUG: Extract the text string out of the list first before running .replace()
+                    name_part = original_filename.rsplit('.', 1)[0]
+                    clean_name = name_part.replace('_', ' ').replace('-', ' ').title()
+                    
+                    sprite_data = {
+                        "name": clean_name,
+                        "filename": original_filename,
+                        "image_url": image_url, 
+                        "category": category,
+                        "tags": tags
+                    }
+                    sprites_collection.insert_one(sprite_data)
+                    inserted_count += 1
             except Exception as e:
-                print(f"❌ Cloudinary Upload Error for {file.filename}: {str(e)}")
+                print(f"❌ Cloudinary Processing Error: {str(e)}")
                 continue
 
-    return redirect(url_for('index'))
+    return jsonify({"status": "success", "uploaded_count": inserted_count}), 200
 
 # ==================== API ENDPOINTS ====================
 @app.route('/api/sprites', methods=['GET'])
@@ -109,7 +109,7 @@ def get_all_sprites():
             "name": s['name'],
             "category": s['category'],
             "tags": s['tags'],
-            "image_url": s['image_url'] # Returns the direct global CDN link instantly
+            "image_url": s['image_url']
         })
         
     return jsonify({"count": len(output), "sprites": output})
