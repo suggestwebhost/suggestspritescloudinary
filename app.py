@@ -16,6 +16,7 @@ sprites_collection = db.spritesrow
 
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
 if CLOUDINARY_URL:
+    print("connected to cloudinary......succesfully")
     cloudinary.config(cloudinary_url=CLOUDINARY_URL)
 # =========================================================================
 
