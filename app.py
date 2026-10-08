@@ -42,7 +42,6 @@ def index():
         total_pages=total_pages,
         total_sprites=total_sprites
     )
-
 @app.route('/upload', methods=['POST'])
 def upload_sprites():
     category = request.form.get('category', 'general').strip().lower()
@@ -69,9 +68,12 @@ def upload_sprites():
                 if image_url:
                     original_filename = file.filename
                     
-                    # FIXED BUG: Extract the text string out of the list first before running .replace()
-                    name_part = original_filename.rsplit('.', 1)[0]
-                    clean_name = name_part.replace('_', ' ').replace('-', ' ').title()
+                    # CORRECTION: Safely extract the string name component out of the list first
+                    name_parts = original_filename.rsplit('.', 1)
+                    filename_without_extension = name_parts[0] # Takes the text string part
+                    
+                    # Now it is safe to execute string manipulation methods
+                    clean_name = filename_without_extension.replace('_', ' ').replace('-', ' ').title()
                     
                     sprite_data = {
                         "name": clean_name,
@@ -83,10 +85,12 @@ def upload_sprites():
                     sprites_collection.insert_one(sprite_data)
                     inserted_count += 1
             except Exception as e:
-                print(f"❌ Cloudinary Processing Error: {str(e)}")
+                # This catches errors and prints them to Render logs instead of failing silently
+                print(f"❌ Processing Error for {file.filename}: {str(e)}")
                 continue
 
     return jsonify({"status": "success", "uploaded_count": inserted_count}), 200
+
 
 # ==================== API ENDPOINTS ====================
 @app.route('/api/sprites', methods=['GET'])
