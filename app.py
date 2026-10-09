@@ -14,6 +14,7 @@ client = MongoClient(MONGO_URI)
 db = client['sprites_db']
 if db:
     sprites_collection = db.spritesrow
+    print("db connected")
 
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
 if CLOUDINARY_URL:
