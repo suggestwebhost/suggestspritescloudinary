@@ -1,111 +1,117 @@
 import os
-import math
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 import cloudinary
 import cloudinary.uploader
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB Max upload limit
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB Limit
 
 # ==================== CLOUD ENVIRONMENT CONFIGURATION ====================
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
-client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000)
-db = client['sprites_db'] 
-sprites_collection = db.spritesrow
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/sprites_db')
+client = MongoClient(MONGO_URI)
+db = client['sprites_db']
+sprites_collection = db.sprites
 
-# Cloudinary Hardcoded Credentials Block
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
 if CLOUDINARY_URL:
     cloudinary.config(cloudinary_url=CLOUDINARY_URL)
-    print("cloudi connected")
-
+    print("cloudi... con...estblsh..")
+else:
+    cloudinary.config(
+        cloud_name = os.environ.get("CLOUD_NAME"),
+        api_key = os.environ.get("CLOUD_API_KEY"),
+        api_secret = os.environ.get("CLOUD_API_SECRET"),
+        secure = True
+    )
 # =========================================================================
-
-PER_PAGE = 12
 
 @app.route('/')
 def index():
     try:
-        page = max(1, int(request.args.get('page', 1)))
-        total_sprites = sprites_collection.count_documents({})
-        total_pages = max(1, math.ceil(total_sprites / PER_PAGE))
-        page = min(page, total_pages)
-        
-        skip_amount = (page - 1) * PER_PAGE
-        sprites = list(sprites_collection.find().skip(skip_amount).limit(PER_PAGE))
-        
+        raw_sprites = list(sprites_collection.find())
+        sprites = []
+        for s in raw_sprites:
+            s['_id'] = str(s['_id'])  # Format object IDs to strings cleanly
+            sprites.append(s)
+        return render_template('index.html', sprites=sprites)
     except Exception as e:
-        return f"🚨 Database Connection Error: {str(e)}", 500
-        
-    return render_template(
-        'index.html', 
-        sprites=sprites, 
-        current_page=page, 
-        total_pages=total_pages,
-        total_sprites=total_sprites
-    )
+        return f"Database Connection/Fetch Failure: {str(e)}", 500
 
 @app.route('/upload', methods=['POST'])
 def upload_sprites():
-    category = request.form.get('category', 'general').strip().lower()
-    tags_raw = request.form.get('tags', '')
-    tags = [t.strip().lower() for t in tags_raw.split(',') if t.strip()]
-    
-    if 'sprites' not in request.files:
-        return jsonify({"error": "No file field 'sprites' found"}), 400
+    try:
+        # Pre-execution environment verification
+        if not CLOUDINARY_URL and not os.environ.get("CLOUD_NAME"):
+            return "Configuration Error: Cloudinary environmental variables are missing entirely.", 500
+
+        category = request.form.get('category', 'general').strip().lower()
+        tags_raw = request.form.get('tags', '')
+        tags = [t.strip().lower() for t in tags_raw.split(',') if t.strip()]
         
-    uploaded_files = request.files.getlist('sprites')
-    
-    if not uploaded_files or (len(uploaded_files) == 1 and uploaded_files[0].filename == ''):
-        return jsonify({"error": "No files selected"}), 400
+        uploaded_files = request.files.getlist('sprites')
+        
+        if not uploaded_files or len(uploaded_files) == 0:
+            return "No files selected", 400
 
-    inserted_count = 0
+        for file in uploaded_files:
+            if file and file.filename != '':
+                filename = file.filename
+                
+                # FIXED: Safely isolate the string at index [0] before calling .replace()
+                base_name_string = filename.rsplit('.', 1)[0]
+                clean_name = base_name_string.replace('_', ' ').replace('-', ' ').title()
+                
+                # 1. Execute Cloudinary Transmission
+                try:
+                    upload_result = cloudinary.uploader.upload(
+                        file,
+                        folder="sprite_vault",
+                        transformation=[{"effect": "pixelate"}] 
+                    )
+                    image_url = upload_result.get('secure_url')
+                    
+                    if not image_url:
+                        raise ValueError("Cloudinary completed upload request but returned a blank secure URL node.")
+                        
+                except Exception as cloud_err:
+                    # STRICT HALT: Stops everything and tells you why Cloudinary failed
+                    return f"CRITICAL: Cloudinary Refused Asset Stream. Reason: {str(cloud_err)}", 500
+                
+                # 2. Execute MongoDB Cluster Save
+                try:
+                    sprite_data = {
+                        "name": clean_name,
+                        "filename": filename,
+                        "image_url": image_url,
+                        "category": category,
+                        "tags": tags
+                    }
+                    sprites_collection.insert_one(sprite_data)
+                except Exception as mongo_err:
+                    # STRICT HALT: Stops everything and tells you why MongoDB failed
+                    return f"CRITICAL: MongoDB Refused Database Insertion. Reason: {str(mongo_err)}", 500
 
-    for file in uploaded_files:
-        if file and file.filename != '':
-            # 1. Stream file payload straight to Cloudinary permanent cloud storage
-            upload_result = cloudinary.uploader.upload(file, folder="sprite_vault")
-            image_url = upload_result.get('secure_url')
-            
-            if image_url:
-                original_filename = file.filename
-                
-                # FIXED CRITICAL BUG: Added the [0] index accessor explicitly
-                name_parts = original_filename.rsplit('.', 1)
-                filename_without_extension = name_parts[0]  
-                
-                # Clean text string conversions are now perfectly safe to process
-                clean_name = filename_without_extension.replace('_', ' ').replace('-', ' ').title()
-                
-                sprite_data = {
-                    "name": clean_name,
-                    "filename": original_filename,
-                    "image_url": image_url, 
-                    "category": category,
-                    "tags": tags
-                }
-                
-                # 2. Commit asset row directly to MongoDB Atlas cluster collection
-                sprites_collection.insert_one(sprite_data)
-                inserted_count += 1
+        return redirect(url_for('index'))
+        
+    except Exception as route_crash:
+        return f"Form Transmission Core Failure: {str(route_crash)}", 500
 
-    return jsonify({"status": "success", "uploaded_count": inserted_count}), 200
+# ==================== REST API ENDPOINTS ====================
 
-# ==================== API ENDPOINTS ====================
 @app.route('/api/sprites', methods=['GET'])
 def get_all_sprites():
+    query = {}
     category = request.args.get('category')
     tag = request.args.get('tag')
     
-    query = {}
     if category:
         query['category'] = category.strip().lower()
     if tag:
         query['tags'] = tag.strip().lower()
         
     sprites = list(sprites_collection.find(query))
-    
     output = []
     for s in sprites:
         output.append({
@@ -115,7 +121,6 @@ def get_all_sprites():
             "tags": s['tags'],
             "image_url": s['image_url']
         })
-        
     return jsonify({"count": len(output), "sprites": output})
 
 if __name__ == '__main__':
