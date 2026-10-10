@@ -12,9 +12,8 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB Limit
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/sprites_db')
 client = MongoClient(MONGO_URI)
 db = client['sprites_db']
-if db is not None:
-    sprites_collection = db.spritesrow
-    print("db connected")
+sprites_collection = db.spritesrow
+print("db connected")
 
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
 if CLOUDINARY_URL:
@@ -41,8 +40,14 @@ def index():
     except Exception as e:
         return f"Database Connection/Fetch Failure: {str(e)}", 500
 
+@app.route('/upload', methods=['GET'])
+def upload_page():
+    """Serves the actual visual web page containing the upload form."""
+    return render_template('upload.html')
+
 @app.route('/upload', methods=['POST'])
 def upload_sprites():
+    """Processes the form submission, pushing assets to Cloudinary and metadata to MongoDB."""
     try:
         # Pre-execution environment verification
         if not CLOUDINARY_URL and not os.environ.get("CLOUD_NAME"):
@@ -54,76 +59,35 @@ def upload_sprites():
         
         uploaded_files = request.files.getlist('sprites')
         
-        if not uploaded_files or len(uploaded_files) == 0:
-            return "No files selected", 400
+        # Verify files exist and the first file actually contains data
+        if not uploaded_files or uploaded_files[0].filename == '':
+            return "Bad Request: No files were selected for upload.", 400
 
         for file in uploaded_files:
-            if file and file.filename != '':
-                filename = file.filename
-                
-                # FIXED: Safely isolate the string at index [0] before calling .replace()
-                base_name_string = filename.rsplit('.', 1)[0]
-                clean_name = base_name_string.replace('_', ' ').replace('-', ' ').title()
-                
-                # 1. Execute Cloudinary Transmission
-                try:
-                    upload_result = cloudinary.uploader.upload(
-                        file,
-                        folder="sprite_vault",
-                        transformation=[{"effect": "pixelate"}] 
-                    )
-                    image_url = upload_result.get('secure_url')
-                    
-                    if not image_url:
-                        raise ValueError("Cloudinary completed upload request but returned a blank secure URL node.")
-                        
-                except Exception as cloud_err:
-                    # STRICT HALT: Stops everything and tells you why Cloudinary failed
-                    return f"CRITICAL: Cloudinary Refused Asset Stream. Reason: {str(cloud_err)}", 500
-                
-                # 2. Execute MongoDB Cluster Save
-                try:
-                    sprite_data = {
-                        "name": clean_name,
-                        "filename": filename,
-                        "image_url": image_url,
-                        "category": category,
-                        "tags": tags
-                    }
-                    sprites_collection.insert_one(sprite_data)
-                except Exception as mongo_err:
-                    # STRICT HALT: Stops everything and tells you why MongoDB failed
-                    return f"CRITICAL: MongoDB Refused Database Insertion. Reason: {str(mongo_err)}", 500
-
+            # Upload file stream directly to Cloudinary
+            upload_result = cloudinary.uploader.upload(
+                file,
+                folder=f"sprites/{category}"
+            )
+            
+            # Construct document data scheme
+            sprite_doc = {
+                "filename": file.filename,
+                "category": category,
+                "tags": tags,
+                "cloudinary_url": upload_result.get("secure_url"),
+                "public_id": upload_result.get("public_id"),
+                "bytes": upload_result.get("bytes"),
+                "format": upload_result.get("format")
+            }
+            
+            # Store in MongoDB
+            sprites_collection.insert_one(sprite_doc)
+            
         return redirect(url_for('index'))
-        
-    except Exception as route_crash:
-        return f"Form Transmission Core Failure: {str(route_crash)}", 500
 
-# ==================== REST API ENDPOINTS ====================
-
-@app.route('/api/sprites', methods=['GET'])
-def get_all_sprites():
-    query = {}
-    category = request.args.get('category')
-    tag = request.args.get('tag')
-    
-    if category:
-        query['category'] = category.strip().lower()
-    if tag:
-        query['tags'] = tag.strip().lower()
-        
-    sprites = list(sprites_collection.find(query))
-    output = []
-    for s in sprites:
-        output.append({
-            "id": str(s['_id']),
-            "name": s['name'],
-            "category": s['category'],
-            "tags": s['tags'],
-            "image_url": s['image_url']
-        })
-    return jsonify({"count": len(output), "sprites": output})
+    except Exception as e:
+        return f"Upload Processing Failure: {str(e)}", 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)
