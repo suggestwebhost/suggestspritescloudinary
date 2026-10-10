@@ -57,9 +57,10 @@ def upload_sprites():
         tags_raw = request.form.get('tags', '')
         tags = [t.strip().lower() for t in tags_raw.split(',') if t.strip()]
         
+        # request.files.getlist returns a Python list of file objects
         uploaded_files = request.files.getlist('sprites')
         
-        # Verify files exist and the first file actually contains data
+        # FIX: Check if the list is empty, or if the first item has an empty filename
         if not uploaded_files or uploaded_files[0].filename == '':
             return "Bad Request: No files were selected for upload.", 400
 
