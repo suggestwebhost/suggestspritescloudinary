@@ -3,117 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpriteVault Hub & API</title>
+    <title>Sprite Gallery Asset Hub</title>
     <style>
-        body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; }
-        .navbar { background-color: #212529; color: #ffffff; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
-        .navbar a { color: #0dcaf0; text-decoration: none; border: 1px solid #0dcaf0; padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; }
-        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; display: flex; gap: 30px; }
-        .sidebar { flex: 1; max-width: 300px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: fit-content; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.85rem; }
-        .form-control { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        .btn-submit { width: 100%; background: #0d6efd; color: #fff; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .gallery-section { flex: 3; }
-        .sprite-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; }
-        .sprite-card { background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e3e6f0; display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .sprite-frame { background-image: linear-gradient(45deg, #eaf0f6 25%, transparent 25%), linear-gradient(-45deg, #eaf0f6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eaf0f6 75%), linear-gradient(-45deg, transparent 75%, #eaf0f6 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px; background-color: #ffffff; display: flex; align-items: center; justify-content: center; height: 150px; border-bottom: 1px solid #e3e6f0; }
-        .sprite-img { max-height: 120px; max-width: 120px; image-rendering: pixelated; object-fit: contain; }
-        .sprite-info { padding: 15px; display: flex; flex-direction: column; flex-grow: 1; }
-        .sprite-title { margin: 0 0 5px 0; font-size: 1rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .sprite-cat { display: inline-block; background: #e9ecef; color: #495057; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; margin-bottom: 10px; width: fit-content; text-transform: capitalize; }
-        .sprite-tags { font-size: 0.75rem; color: #0dcaf0; margin-bottom: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        
-        /* Forces cross-origin content links to open or trigger download properly */
-        .btn-download { display: block; text-align: center; background: #212529; color: #fff; text-decoration: none; padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-top: auto; }
-        
-        .pagination { display: flex; justify-content: center; gap: 10px; margin-top: 4px; padding: 20px 0; list-style: none; }
-        .pagination a { color: #212529; text-decoration: none; padding: 8px 12px; border: 1px solid #dee2e6; background: #fff; border-radius: 4px; font-weight: bold; }
-        .pagination .active a { background: #0d6efd; color: #fff; border-color: #0d6efd; }
-        @media (max-width: 768px) { .container { flex-direction: column; } .sidebar { max-width: 100%; } .sprite-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 480px) { .sprite-grid { grid-template-columns: 1fr; } }
+        body { font-family: sans-serif; margin: 40px; background: #f4f4f9; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccc; padding-bottom: 20px; }
+        .btn { background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        .gallery { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 30px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 220px; text-align: center; }
+        .card img { max-width: 100%; max-height: 150px; object-fit: contain; margin-bottom: 10px; background: #e9e9e9; border-radius: 4px; }
+        .tag { background: #e2e2e2; border-radius: 3px; padding: 2px 6px; font-size: 12px; margin: 2px; display: inline-block; }
     </style>
 </head>
 <body>
 
-    <div class="navbar">
-        <strong style="font-size: 1.2rem;">👾 SpriteVault Hub & API</strong>
-        <a href="/api/sprites" target="_blank">Test API Endpoint</a>
+    <div class="header">
+        <h1>Sprite Gallery Hub</h1>
+        <a href="{{ url_for('upload_page') }}" class="btn">+ Upload New Sprites</a>
     </div>
 
-    <div class="container">
-        <div class="sidebar">
-            <h3 style="margin-top:0;">Bulk Upload</h3>
-            <form action="/upload" method="POST" enctype="multipart/form-data">
-                <div class="form-group">
-                    <label>Select Files</label>
-                    <input type="file" class="form-control" name="sprites" accept="image/*" multiple required>
-                </div>
-                <div class="form-group">
-                    <label>Category</label>
-                    <select class="form-control" name="category">
-                        <option value="characters">Characters</option>
-                        <option value="items">Items / Loot</option>
-                        <option value="tilesets">Tilesets</option>
-                        <option value="ui">UI Elements</option>
-                        <option value="effects">Effects / FX</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Tags</label>
-                    <input type="text" class="form-control" name="tags" placeholder="pixel, 16bit">
-                </div>
-                <button type="submit" class="btn-submit">Upload Assets</button>
-            </form>
-        </div>
-
-        <div class="gallery-section">
-            <h2 style="margin-top:0; margin-bottom: 20px;">Hosted Vault</h2>
-            
-            {% if not sprites %}
-            <p style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e3e6f0; text-align: center; color: #666;">
-                Your repository database is empty. Upload image files to populate your grid!
-            </p>
-            {% endif %}
-
-            <div class="sprite-grid">
-                {% for sprite in sprites %}
-                <div class="sprite-card">
-                    <div class="sprite-frame">
-                        <img src="{{ sprite.image_url }}" class="sprite-img" alt="{{ sprite.name }}">
-                    </div>
-                    <div class="sprite-info">
-                        <div class="sprite-title" title="{{ sprite.name }}">{{ sprite.name }}</div>
-                        <div class="sprite-cat">{{ sprite.category }}</div>
-                        <div class="sprite-tags">
-                            {% for tag in sprite.tags %}
-                            #{{ tag }} 
-                            {% endfor %}
-                        </div>
-                        <!-- Direct link download stream using Cloudinary storage paths -->
-                        <a href="{{ sprite.image_url }}" target="_blank" download="{{ sprite.filename }}" class="btn-download">📥 Download</a>
+    <div class="gallery">
+        {% if sprites %}
+            {% for sprite in sprites %}
+                <div class="card">
+                    <img src="{{ sprite.cloudinary_url }}" alt="{{ sprite.filename }}">
+                    <strong>{{ sprite.filename }}</strong>
+                    <p style="color: #666; font-size: 14px;">Category: {{ sprite.category }}</p>
+                    <div>
+                        {% for tag in sprite.tags %}
+                            <span class="tag">#{{ tag }}</span>
+                        {% endfor %}
                     </div>
                 </div>
-                {% endfor %}
-            </div>
-
-            {% if total_pages > 1 %}
-            <ul class="pagination">
-                {% if current_page > 1 %}
-                <li><a href="?page={{ current_page - 1 }}">&laquo; Prev</a></li>
-                {% endif %}
-                {% for p in range(1, total_pages + 1) %}
-                <li class="{% if p == current_page %}active{% endif %}">
-                    <a href="?page={{ p }}">{{ p }}</a>
-                </li>
-                {% endfor %}
-                {% if current_page < total_pages %}
-                <li><a href="?page={{ current_page + 1 }}">Next &raquo;</a></li>
-                {% endif %}
-            </ul>
-            {% endif %}
-
-        </div>
+            {% endfor %}
+        {% else %}
+            <p>No sprites uploaded yet. Click the button above to upload your first asset!</p>
+        {% endif %}
     </div>
 
 </body>
