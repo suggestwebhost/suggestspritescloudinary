@@ -42,11 +42,14 @@ def index():
 
 @app.route('/upload', methods=['GET'])
 def upload_page():
+    print("start get uploads")
     """Serves the actual visual web page containing the upload form."""
+        
     return render_template('upload.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_sprites():
+    print("start upload post")
     """Processes the form submission, pushing assets to Cloudinary and metadata to MongoDB."""
     try:
         # Pre-execution environment verification
