@@ -68,6 +68,7 @@ def upload_sprites():
             return "Bad Request: No files were selected for upload.", 400
 
         for file in uploaded_files:
+
             # Upload file stream directly to Cloudinary
             upload_result = cloudinary.uploader.upload(
                 file,
